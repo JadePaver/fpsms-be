@@ -205,7 +205,7 @@ export async function removeItem(item) {
 }
 
 export async function getAllFurnitures() {
-  const result = await pool.query("SELECT * FROM items WHERE type ='Furniture'");
+  const result = await pool.query("SELECT * FROM items WHERE type ='Furniture' AND is_remove =0");
   const rows = result[0];
   return rows;
 }
