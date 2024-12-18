@@ -8,14 +8,11 @@ import {
   updateItemImage,
   getAllMaterials,
   getAllFurnitures,
-  updateItem, 
-  removeItem
-
-} from "../models/items.js"; 
+  updateItem,
+  removeItem,
+} from "../models/items.js";
 
 const router = express.Router();
-
-
 
 router.post("/create", upload.single("image"), async (req, res) => {
   try {
@@ -28,6 +25,7 @@ router.post("/create", upload.single("image"), async (req, res) => {
       price: itemData.price,
       type: itemData.type,
       selectedDate: itemData.selectedDate,
+      remarks: itemData.remarks,
       ingredients: ingredientsData,
     };
 
@@ -45,29 +43,30 @@ router.post("/create", upload.single("image"), async (req, res) => {
   }
 });
 
-router.post("/update",upload.single("image"), async (req, res) => {
+router.post("/update", upload.single("image"), async (req, res) => {
   const itemData = JSON.parse(req.body.item);
-    const ingredientsData = JSON.parse(req.body.ingredients);
 
-    const newItem = {
-      id:itemData.id,
-      description: itemData.description,
-      stock: itemData.stock,
-      price: itemData.price,
-      type: itemData.type,
-      selectedDate: itemData.selectedDate,
-      ingredients: ingredientsData,
-      imagePath: req.file ? req.file.filename : null, 
-    };
+  const ingredientsData = JSON.parse(req.body.ingredients);
 
-    const updateItemResult = await updateItem(newItem);
-    
-    if (updateItemResult.success && newItem.imagePath) {
-      await updateItemImage(newItem.id, newItem.imagePath); 
-    }
+  const newItem = {
+    id: itemData.id,
+    description: itemData.description,
+    stock: itemData.stock,
+    price: itemData.price,
+    type: itemData.type,
+    remarks: itemData.remarks,
+    selectedDate: itemData.selectedDate,
+    ingredients: ingredientsData,
+    imagePath: req.file ? req.file.filename : null,
+  };
 
-    res.status(200).send("Item updated successfully");
+  const updateItemResult = await updateItem(newItem);
 
+  if (updateItemResult.success && newItem.imagePath) {
+    await updateItemImage(newItem.id, newItem.imagePath);
+  }
+
+  res.status(200).send("Item updated successfully");
 });
 
 router.get("/get_all", async (req, res, next) => {
@@ -82,7 +81,6 @@ router.get("/get_all", async (req, res, next) => {
 router.post("/remove", async (req, res, next) => {
   try {
     const data = req.body;
-    console.log("data:",data)
 
     await removeItem(data);
     res.status(200).send("item removed");
@@ -104,6 +102,20 @@ router.get("/get_furnitures", async (req, res, next) => {
   try {
     const data = await getAllFurnitures();
     res.status(200).send(data);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/update_restock_date", async (req, res, next) => {
+  try {
+    const { id, restock_date } = req.body;
+
+    await pool.query("UPDATE items SET restock_date=? WHERE id=?", [
+      restock_date,
+      id,
+    ]);
+    res.status(200).send("Restock date has been updated");
   } catch (error) {
     next(error);
   }

@@ -8,7 +8,6 @@ const router = express.Router();
 router.post("/add", async (req, res, next) => {
   try {
     const data = req.body;
-    console.log("data:", req.body);
 
     await addDelivery(data);
     res.send("send");
