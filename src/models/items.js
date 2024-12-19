@@ -5,26 +5,34 @@ import pool from "../config/conn.js";
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, "../fpsme-fe/public/item_images/"); 
+    cb(null, "../fpsme-fe/public/item_images/");
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + path.extname(file.originalname)); 
+    cb(null, uniqueSuffix + path.extname(file.originalname));
   },
 });
 
 export const upload = multer({ storage: storage });
 
 export async function addItem(data) {
-  const { description, stock, price, type, selectedDate, ingredients } = data;
+  const {
+    description,
+    stock,
+    price,
+    type,
+    selectedDate,
+    ingredients,
+    remarks,
+  } = data;
 
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
 
     const result = await connection.query(
-      `INSERT INTO items (description, stock, price, type, batch_date) VALUES (?, ?, ?, ?, ?)`,
-      [description, stock, price, type, selectedDate]
+      `INSERT INTO items (description, stock, price, type, batch_date, remarks) VALUES (?, ?, ?, ?, ?, ?)`,
+      [description, stock, price, type, selectedDate, remarks]
     );
 
     const newItemId = result[0].insertId;
@@ -55,18 +63,31 @@ export async function addItem(data) {
 }
 
 export async function updateItem(data) {
-  const { id, description, stock, price, type, selectedDate, ingredients, imagePath } = data;
+  const {
+    id,
+    description,
+    stock,
+    price,
+    type,
+    selectedDate,
+    ingredients,
+    imagePath,
+    remarks,
+  } = data;
 
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
 
-    const [previousItem] = await connection.query(`SELECT stock FROM items WHERE id = ?`, [id]);
+    const [previousItem] = await connection.query(
+      `SELECT stock FROM items WHERE id = ?`,
+      [id]
+    );
     const previousStock = previousItem[0].stock;
 
     const updateQuery = `
       UPDATE items 
-      SET description = ?, stock = ?, price = ?, type = ?, batch_date = ?
+      SET description = ?, stock = ?, price = ?, type = ?, batch_date = ?, remarks = ?
       ${imagePath ? ", image = ?" : ""}
       WHERE id = ?`;
 
@@ -76,11 +97,12 @@ export async function updateItem(data) {
       price,
       type,
       selectedDate,
-      ...(imagePath ? [imagePath] : []), 
+      remarks,
+      ...(imagePath ? [imagePath] : []),
       id,
     ];
 
-    await connection.query(updateQuery, params);
+    const data = await connection.query(updateQuery, params);
 
     if (type === "Furniture") {
       const stockDifference = stock - previousStock;
@@ -91,13 +113,13 @@ export async function updateItem(data) {
       );
 
       for (const item of ingredients) {
-
         await connection.query(
           `INSERT INTO material_cost (product_item_id, material_item_id, quantity) VALUES (?, ?, ?)`,
           [id, item.material.id, item.quantity]
         );
 
-        const deductedStock = item.material.stock - (item.quantity * stockDifference);
+        const deductedStock =
+          item.material.stock - item.quantity * stockDifference;
         await connection.query(`UPDATE items SET stock = ? WHERE id = ?`, [
           deductedStock,
           item.material.id,
@@ -114,8 +136,6 @@ export async function updateItem(data) {
     connection.release();
   }
 }
-
-
 
 export async function saveItemImage(req, res, next) {
   const uploadSingle = upload.single("image");
@@ -162,24 +182,28 @@ export async function getItems() {
     const [rows] = await pool.query(query);
 
     const itemsWithMaterials = rows.reduce((acc, row) => {
-      const existingItem = acc.find(item => item.id === row.id);
+      const existingItem = acc.find((item) => item.id === row.id);
 
       if (existingItem) {
         existingItem.ingredients.push({
           material_item_id: row.material_item_id,
           material_description: row.material_description,
           quantity: row.quantity,
-          material_stock: row.material_stock
+          material_stock: row.material_stock,
         });
       } else {
         acc.push({
           ...row,
-          ingredients: row.material_item_id ? [{
-            material_item_id: row.material_item_id,
-            material_description: row.material_description,
-            quantity: row.quantity,
-            material_stock: row.material_stock
-          }] : []
+          ingredients: row.material_item_id
+            ? [
+                {
+                  material_item_id: row.material_item_id,
+                  material_description: row.material_description,
+                  quantity: row.quantity,
+                  material_stock: row.material_stock,
+                },
+              ]
+            : [],
         });
       }
 
@@ -194,18 +218,22 @@ export async function getItems() {
 }
 
 export async function getAllMaterials() {
-  const result = await pool.query("SELECT * FROM items WHERE type ='Material'");
+  const result = await pool.query(
+    "SELECT * FROM items WHERE type ='Material' AND is_remove = 0 "
+  );
   const rows = result[0];
   return rows;
 }
 
 export async function removeItem(item) {
-   await pool.query("UPDATE items SET is_remove=? WHERE id=?",[1,item.id]);
+  await pool.query("UPDATE items SET is_remove=? WHERE id=?", [1, item.id]);
   return;
 }
 
 export async function getAllFurnitures() {
-  const result = await pool.query("SELECT * FROM items WHERE type ='Furniture' AND is_remove =0");
+  const result = await pool.query(
+    "SELECT * FROM items WHERE type ='Furniture' AND is_remove =0"
+  );
   const rows = result[0];
   return rows;
 }
