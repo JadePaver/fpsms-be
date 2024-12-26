@@ -2,7 +2,7 @@ import express from "express";
 import jwt from "jsonwebtoken";
 import pool from "../config/conn.js";
 
-import { reserve_po, getAllPO, submitsale } from "../models/purchase_order_.js";
+import { reserve_po, getAllPO, submitsale,getReport } from "../models/purchase_order_.js";
 
 const router = express.Router();
 
@@ -24,6 +24,18 @@ router.post("/checkout", async (req, res, next) => {
 
     const reciept = await reserve_po(data);
     res.status(200).send(reciept);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/report", async (req, res, next) => {
+  try {
+    const data = req.body;
+
+    const report = await getReport(data)
+
+    res.status(200).send(report);
   } catch (error) {
     next(error);
   }

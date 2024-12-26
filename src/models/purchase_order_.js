@@ -30,20 +30,13 @@ export async function submitsale(data) {
       0
     );
 
-    const today = moment();
+    const today = moment().add(1, "days");
     const dataToday = today.format("YYYY-MM-DD");
     let new_PO;
     if (receipt) {
       await connection.query(
         "UPDATE purchase_order SET costumer_id = ?, invoice_id = ?, status = ?, total_amount = ?, date_of_purchased = ? WHERE receipt = ?",
-        [
-          customerID,
-          invoice,
-          "Completely Paid",
-          totalAmount,
-          dataToday,
-          receipt,
-        ]
+        [customerID, invoice, "Paid", totalAmount, dataToday, receipt]
       );
 
       const [result] = await connection.query(
@@ -56,7 +49,7 @@ export async function submitsale(data) {
 
       const [insertResult] = await connection.query(
         "INSERT INTO purchase_order (receipt, costumer_id, invoice_id, status, total_amount, date_of_purchased) VALUES (?,?,?,?,?,?)",
-        [new_PO, customerID, invoice, "Completely Paid", totalAmount, dataToday]
+        [new_PO, customerID, invoice, "Paid", totalAmount, dataToday]
       );
 
       currentReceiptID = insertResult.insertId;
@@ -147,6 +140,82 @@ export async function getNew_po() {
   )}`;
 
   return receiptNumber;
+}
+
+export async function getReport(data) {
+  try {
+    const { start, end } = data;
+    const report = await pool.query(
+      `
+      SELECT 
+        po.*, 
+        pf.item_id,pf.quantity,pf.price,
+        i.description,
+        c.fullname
+      FROM 
+        purchase_order po
+      INNER JOIN 
+        purchased_furnitures pf ON po.id = pf.po_id
+      INNER JOIN 
+        items i ON pf.item_id = i.id
+      INNER JOIN 
+        customers c ON po.costumer_id = c.id
+      WHERE po.status = 'Paid' AND po.date_of_purchased BETWEEN ? AND ?
+      `,
+      [start, end]
+    );
+    // Initialize an empty object to group by `id`
+    const groupedReports = {};
+
+    // Iterate over the result to group by `id`
+    report[0].forEach((entry) => {
+      const {
+        id,
+        receipt,
+        costumer_id,
+        invoice_id,
+        status,
+        total_amount,
+        date_of_purchased,
+        item_id,
+        quantity,
+        price,
+        description,
+        fullname,
+      } = entry;
+
+      // If the id doesn't exist in the groupedReports, create it
+      if (!groupedReports[id]) {
+        groupedReports[id] = {
+          id,
+          receipt,
+          costumer_id,
+          invoice_id,
+          status,
+          total_amount,
+          date_of_purchased,
+          fullname,
+          items: [], // Initialize an empty items array
+        };
+      }
+
+      // Add the item details to the items array
+      groupedReports[id].items.push({
+        item_id,
+        quantity,
+        price,
+        description,
+      });
+    });
+
+    // Convert groupedReports object to an array
+    const correctFormat = Object.values(groupedReports);
+    
+    return correctFormat; //
+  } catch (error) {
+    console.error("Error fetching report:", error);
+    throw new Error("Could not fetch report");
+  }
 }
 
 export async function getAllPO() {
